@@ -66,6 +66,18 @@ namespace cAlgo
         [Parameter("Line Style", DefaultValue = LineStyle.Solid, Group = "Wicks")]
         public LineStyle WicksLineStyle { get; set; }
 
+        [Parameter("Open", DefaultValue = true, Group = "OHLC Outputs")]
+        public bool IsOpenOutputEnabled { get; set; }
+
+        [Parameter("High", DefaultValue = true, Group = "OHLC Outputs")]
+        public bool IsHighOutputEnabled { get; set; }
+
+        [Parameter("Low", DefaultValue = true, Group = "OHLC Outputs")]
+        public bool IsLowOutputEnabled { get; set; }
+
+        [Parameter("Close", DefaultValue = true, Group = "OHLC Outputs")]
+        public bool IsCloseOutputEnabled { get; set; }
+
         #endregion Parameters
 
         #region Other properties
@@ -79,6 +91,22 @@ namespace cAlgo
         }
 
         #endregion Other properties
+
+        #region Outputs
+
+        [Output("Open", LineColor = "Transparent", PlotType = PlotType.Line)]
+        public IndicatorDataSeries Open { get; set; }
+
+        [Output("High", LineColor = "Transparent", PlotType = PlotType.Line)]
+        public IndicatorDataSeries High { get; set; }
+
+        [Output("Low", LineColor = "Transparent", PlotType = PlotType.Line)]
+        public IndicatorDataSeries Low { get; set; }
+
+        [Output("Close", LineColor = "Transparent", PlotType = PlotType.Line)]
+        public IndicatorDataSeries Close { get; set; }
+
+        #endregion Outputs
 
         #region Overridden methods
 
@@ -94,7 +122,7 @@ namespace cAlgo
 
                 var error = "Custom Renko Chart Error: Current chart is not a Renko chart, please switch to a Renko chart";
 
-                Chart.DrawStaticText(name, error, VerticalAlignment.Center, HorizontalAlignment.Center, Color.Red);
+                Area.DrawStaticText(name, error, VerticalAlignment.Center, HorizontalAlignment.Center, Color.Red);
 
                 return;
             }
@@ -128,6 +156,8 @@ namespace cAlgo
 
             UpdateLastBar(time, index);
 
+            FillOutputs(index, _lastBar, _previousBar);
+
             var bodyRange = Math.Round(_lastBar.BodyRange, Symbol.Digits, MidpointRounding.AwayFromZero);
 
             if (_previousBar == null && bodyRange >= _sizeInPips)
@@ -150,6 +180,31 @@ namespace cAlgo
         #endregion Overridden methods
 
         #region Other methods
+
+        private void FillOutputs(int index, CustomOhlcBar lastBar, CustomOhlcBar previousBar)
+        {
+            if (IsOpenOutputEnabled)
+            {
+                var open = previousBar == null || previousBar.Type == lastBar.Type ? lastBar.Open : previousBar.Open;
+
+                Open[index] = decimal.ToDouble(open);
+            }
+
+            if (IsHighOutputEnabled)
+            {
+                High[index] = lastBar.High;
+            }
+
+            if (IsLowOutputEnabled)
+            {
+                Low[index] = lastBar.Low;
+            }
+
+            if (IsCloseOutputEnabled)
+            {
+                Close[index] = decimal.ToDouble(lastBar.Close);
+            }
+        }
 
         private Color GetColor(string colorString, int alpha = 255)
         {
