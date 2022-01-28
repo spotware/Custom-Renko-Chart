@@ -36,8 +36,8 @@ namespace cAlgo
         [Parameter("Bearish Bar Color", DefaultValue = "Red", Group = "Body")]
         public string BearishBarBodyColor { get; set; }
 
-        [Parameter("Transparency", DefaultValue = 100, MinValue = 0, MaxValue = 255, Group = "Body")]
-        public int BodyTransparency { get; set; }
+        [Parameter("Opacity", DefaultValue = 100, MinValue = 0, MaxValue = 255, Group = "Body")]
+        public int BodyOpacity { get; set; }
 
         [Parameter("Thickness", DefaultValue = 1, Group = "Body")]
         public int BodyThickness { get; set; }
@@ -57,8 +57,8 @@ namespace cAlgo
         [Parameter("Bearish Bar Color", DefaultValue = "Red", Group = "Wicks")]
         public string BearishBarWickColor { get; set; }
 
-        [Parameter("Transparency", DefaultValue = 100, MinValue = 0, MaxValue = 255, Group = "Wicks")]
-        public int WicksTransparency { get; set; }
+        [Parameter("Opacity", DefaultValue = 100, MinValue = 0, MaxValue = 255, Group = "Wicks")]
+        public int WicksOpacity { get; set; }
 
         [Parameter("Thickness", DefaultValue = 2, Group = "Wicks")]
         public int WicksThickness { get; set; }
@@ -133,11 +133,11 @@ namespace cAlgo
 
             _isChartTypeValid = true;
 
-            _bullishBarBodyColor = GetColor(BullishBarBodyColor, BodyTransparency);
-            _bearishBarBodyColor = GetColor(BearishBarBodyColor, BodyTransparency);
+            _bullishBarBodyColor = GetColor(BullishBarBodyColor, BodyOpacity);
+            _bearishBarBodyColor = GetColor(BearishBarBodyColor, BodyOpacity);
 
-            _bullishBarWickColor = GetColor(BullishBarWickColor, WicksTransparency);
-            _bearishBarWickColor = GetColor(BearishBarWickColor, WicksTransparency);
+            _bullishBarWickColor = GetColor(BullishBarWickColor, WicksOpacity);
+            _bearishBarWickColor = GetColor(BearishBarWickColor, WicksOpacity);
 
             _sizeInPips = (decimal)(SizeInPips * Symbol.PipSize);
             _doubleSizeInPips = _sizeInPips * (decimal)2.0;
