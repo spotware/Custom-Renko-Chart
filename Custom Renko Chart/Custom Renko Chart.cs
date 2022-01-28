@@ -1,16 +1,15 @@
 ﻿using cAlgo.API;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace cAlgo
 {
-    [Indicator(IsOverlay = true, TimeZone = TimeZones.UTC, AccessRights = AccessRights.FullAccess)]
-    public class CustomPeriodChart : Indicator
+    [Indicator(IsOverlay = true, TimeZone = TimeZones.UTC, AccessRights = AccessRights.None)]
+    public class CustomRenkoChart : Indicator
     {
         #region Fields
 
-        private const string Name = "Custom Period Chart";
+        private const string Name = "Custom Renko Chart";
 
         private readonly List<string> _objectNames = new List<string>();
 
@@ -49,6 +48,9 @@ namespace cAlgo
         [Parameter("Fill", DefaultValue = true, Group = "Body")]
         public bool FillBody { get; set; }
 
+        [Parameter("Show", DefaultValue = true, Group = "Wicks")]
+        public bool ShowWicks { get; set; }
+
         [Parameter("Bullish Bar Color", DefaultValue = "Lime", Group = "Wicks")]
         public string BullishBarWickColor { get; set; }
 
@@ -64,35 +66,7 @@ namespace cAlgo
         [Parameter("Line Style", DefaultValue = LineStyle.Solid, Group = "Wicks")]
         public LineStyle WicksLineStyle { get; set; }
 
-        [Parameter("Open", DefaultValue = true, Group = "OHLC Outputs")]
-        public bool IsOpenOutputEnabled { get; set; }
-
-        [Parameter("High", DefaultValue = true, Group = "OHLC Outputs")]
-        public bool IsHighOutputEnabled { get; set; }
-
-        [Parameter("Low", DefaultValue = true, Group = "OHLC Outputs")]
-        public bool IsLowOutputEnabled { get; set; }
-
-        [Parameter("Close", DefaultValue = true, Group = "OHLC Outputs")]
-        public bool IsCloseOutputEnabled { get; set; }
-
         #endregion Parameters
-
-        #region Outputs
-
-        [Output("Open", LineColor = "Transparent", PlotType = PlotType.Line)]
-        public IndicatorDataSeries Open { get; set; }
-
-        [Output("High", LineColor = "Transparent", PlotType = PlotType.Line)]
-        public IndicatorDataSeries High { get; set; }
-
-        [Output("Low", LineColor = "Transparent", PlotType = PlotType.Line)]
-        public IndicatorDataSeries Low { get; set; }
-
-        [Output("Close", LineColor = "Transparent", PlotType = PlotType.Line)]
-        public IndicatorDataSeries Close { get; set; }
-
-        #endregion Outputs
 
         #region Other properties
 
@@ -110,16 +84,26 @@ namespace cAlgo
 
         protected override void Initialize()
         {
-            if (Chart.TimeFrame.ToString().StartsWith("Renko", StringComparison.Ordinal) == false)
-            {
-                Print("Current chart is not a Renko chart, please switch to a Renko chart");
+            _chartObjectNamesSuffix = string.Format("{0}_{1}", Name, DateTime.Now.Ticks);
 
+            var timeFrame = Chart.TimeFrame.ToString();
+
+            if (timeFrame.StartsWith("Renko", StringComparison.Ordinal) == false)
+            {
+                var name = string.Format("Error_{0}", _chartObjectNamesSuffix);
+
+                var error = "Custom Renko Chart Error: Current chart is not a Renko chart, please switch to a Renko chart";
+
+                Chart.DrawStaticText(name, error, VerticalAlignment.Center, HorizontalAlignment.Center, Color.Red);
+
+                return;
+            }
+            else if (timeFrame.Equals(string.Format("Renko{0}", SizeInPips), StringComparison.InvariantCultureIgnoreCase))
+            {
                 return;
             }
 
             _isChartTypeValid = true;
-
-            _chartObjectNamesSuffix = string.Format("{0}_{1}", Name, DateTime.Now.Ticks);
 
             _bullishBarBodyColor = GetColor(BullishBarBodyColor, BodyTransparency);
             _bearishBarBodyColor = GetColor(BearishBarBodyColor, BodyTransparency);
@@ -133,13 +117,6 @@ namespace cAlgo
 
         public override void Calculate(int index)
         {
-            if (index < 900) return;
-
-            if (index == 900)
-            {
-                Chart.DrawVerticalLine("vert", index, Color.Red);
-            }
-
             if (_isChartTypeValid == false) return;
 
             var time = Bars.OpenTimes[index];
@@ -168,11 +145,6 @@ namespace cAlgo
                     ChangeLastBar(time, index);
                 }
             }
-
-            if (_lastBar != null)
-            {
-                FillOutputs(index, _lastBar);
-            }
         }
 
         #endregion Overridden methods
@@ -188,8 +160,6 @@ namespace cAlgo
 
         private void DrawBar(int index, CustomOhlcBar lastBar, CustomOhlcBar previousBar)
         {
-            Chart.DrawVerticalLine(index.ToString(), index, Color.Yellow);
-
             string objectName = string.Format("{0}.{1}", lastBar.StartTime.Ticks, _chartObjectNamesSuffix);
 
             var barBodyColor = lastBar.Open > lastBar.Close ? _bearishBarBodyColor : _bullishBarBodyColor;
@@ -200,53 +170,33 @@ namespace cAlgo
 
             lastBar.Rectangle.IsFilled = FillBody;
 
-            string upperWickObjectName = string.Format("{0}.UpperWick", objectName);
-            string lowerWickObjectName = string.Format("{0}.LowerWick", objectName);
+            if (ShowWicks)
+            {
+                string upperWickObjectName = string.Format("{0}.UpperWick", objectName);
+                string lowerWickObjectName = string.Format("{0}.LowerWick", objectName);
 
-            //var barHalfTimeInMinutes = (_lastBar.Rectangle.Time2 - _lastBar.Rectangle.Time1).TotalMinutes / 2;
-            //var barCenterTime = _lastBar.Rectangle.Time1.AddMinutes(barHalfTimeInMinutes);
+                var barHalfTimeInMinutes = (_lastBar.Rectangle.Time2 - _lastBar.Rectangle.Time1).TotalMinutes / 2;
+                var barCenterTime = _lastBar.Rectangle.Time1.AddMinutes(barHalfTimeInMinutes);
 
-            //if (bar.Open > bar.Close)
-            //{
-            //    Area.DrawTrendLine(upperWickObjectName, barCenterTime, _lastBar.Rectangle.Y1, barCenterTime, bar.High,
-            //        _bearishBarWickColor, WicksThickness, WicksLineStyle);
-            //    Area.DrawTrendLine(lowerWickObjectName, barCenterTime, _lastBar.Rectangle.Y2, barCenterTime, bar.Low,
-            //        _bearishBarWickColor, WicksThickness, WicksLineStyle);
-            //}
-            //else
-            //{
-            //    Area.DrawTrendLine(upperWickObjectName, barCenterTime, _lastBar.Rectangle.Y2,
-            //        barCenterTime, bar.High, _bullishBarWickColor, WicksThickness, WicksLineStyle);
-            //    Area.DrawTrendLine(lowerWickObjectName, barCenterTime, _lastBar.Rectangle.Y1, barCenterTime, bar.Low,
-            //        _bullishBarWickColor, WicksThickness, WicksLineStyle);
-            //}
+                if (lastBar.Open > lastBar.Close)
+                {
+                    Area.DrawTrendLine(upperWickObjectName, barCenterTime, _lastBar.Rectangle.Y1, barCenterTime, lastBar.High,
+                        _bearishBarWickColor, WicksThickness, WicksLineStyle);
+                    Area.DrawTrendLine(lowerWickObjectName, barCenterTime, _lastBar.Rectangle.Y2, barCenterTime, lastBar.Low,
+                        _bearishBarWickColor, WicksThickness, WicksLineStyle);
+                }
+                else
+                {
+                    Area.DrawTrendLine(upperWickObjectName, barCenterTime, _lastBar.Rectangle.Y2,
+                        barCenterTime, lastBar.High, _bullishBarWickColor, WicksThickness, WicksLineStyle);
+                    Area.DrawTrendLine(lowerWickObjectName, barCenterTime, _lastBar.Rectangle.Y1, barCenterTime, lastBar.Low,
+                        _bullishBarWickColor, WicksThickness, WicksLineStyle);
+                }
+            }
 
             if (!_objectNames.Contains(objectName))
             {
                 _objectNames.Add(objectName);
-            }
-        }
-
-        private void FillOutputs(int index, CustomOhlcBar bar)
-        {
-            if (IsOpenOutputEnabled)
-            {
-                Open[index] = bar.Rectangle.Y1;
-            }
-
-            if (IsHighOutputEnabled)
-            {
-                High[index] = bar.High;
-            }
-
-            if (IsLowOutputEnabled)
-            {
-                Low[index] = bar.Low;
-            }
-
-            if (IsCloseOutputEnabled)
-            {
-                Close[index] = bar.Rectangle.Y2;
             }
         }
 
