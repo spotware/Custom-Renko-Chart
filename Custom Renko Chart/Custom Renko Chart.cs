@@ -1,6 +1,7 @@
 ﻿using cAlgo.API;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace cAlgo
 {
@@ -120,7 +121,17 @@ namespace cAlgo
             {
                 var name = string.Format("Error_{0}", _chartObjectNamesSuffix);
 
-                var error = "Custom Renko Chart Error: Current chart is not a Renko chart, please switch to a Renko chart";
+                var error = string.Format("{0} Error: Current chart is not a Renko chart, please switch to a Renko chart", Name);
+
+                Area.DrawStaticText(name, error, VerticalAlignment.Center, HorizontalAlignment.Center, Color.Red);
+
+                return;
+            }
+            else if (int.Parse(timeFrame.Substring(5), CultureInfo.InvariantCulture) > SizeInPips)
+            {
+                var name = string.Format("Error_{0}", _chartObjectNamesSuffix);
+
+                var error = string.Format("{0} Error: You must use a smaller Ranko chart to build a larger one", Name);
 
                 Area.DrawStaticText(name, error, VerticalAlignment.Center, HorizontalAlignment.Center, Color.Red);
 
@@ -213,7 +224,7 @@ namespace cAlgo
             return Color.FromArgb(alpha, color);
         }
 
-        private void DrawBar(int index, CustomOhlcBar lastBar, CustomOhlcBar previousBar)
+        private void DrawBar(CustomOhlcBar lastBar, CustomOhlcBar previousBar)
         {
             string objectName = string.Format("{0}.{1}", lastBar.StartTime.Ticks, _chartObjectNamesSuffix);
 
@@ -264,7 +275,7 @@ namespace cAlgo
                     _lastBar.Open = _previousBar.Type == _lastBar.Type ? _previousBar.Close : _previousBar.Open;
                 }
 
-                DrawBar(index, _lastBar, _previousBar);
+                DrawBar(_lastBar, _previousBar);
             }
 
             _previousBar = _lastBar;
