@@ -171,41 +171,49 @@ namespace cAlgo
         {
             if (_isChartTypeValid == false) return;
 
-            var barsIndex = _bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+            var otherBarsIndex = _bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
 
-            var time = _bars.OpenTimes[barsIndex];
+            var time = _bars.OpenTimes[otherBarsIndex];
 
             if (_lastBar == null)
             {
-                ChangeLastBar(time, barsIndex);
+                ChangeLastBar(time, otherBarsIndex);
             }
 
-            UpdateLastBar(time, barsIndex);
-
-            FillOutputs(index, _lastBar, _previousBar);
-
-            var bodyRange = Math.Round(_lastBar.BodyRange, Symbol.Digits, MidpointRounding.AwayFromZero);
-
-            if (_previousBar == null && bodyRange >= _sizeInPips)
+            for (int barIndex = _lastBar.EndIndex; barIndex <= otherBarsIndex; barIndex++)
             {
-                ChangeLastBar(time, barsIndex);
-            }
-            else if (_previousBar != null)
-            {
-                if (_previousBar.Type == _lastBar.Type && bodyRange >= _sizeInPips)
-                {
-                    ChangeLastBar(time, barsIndex);
-                }
-                else if (_previousBar.Type != _lastBar.Type && bodyRange >= _doubleSizeInPips)
-                {
-                    ChangeLastBar(time, barsIndex);
-                }
+                OnBar(_bars.OpenTimes[barIndex], barIndex, index);
             }
         }
 
         #endregion Overridden methods
 
         #region Other methods
+
+        private void OnBar(DateTime time, int barIndex, int chartBarsIndex)
+        {
+            UpdateLastBar(time, barIndex);
+
+            FillOutputs(chartBarsIndex, _lastBar, _previousBar);
+
+            var bodyRange = Math.Round(_lastBar.BodyRange, Symbol.Digits, MidpointRounding.AwayFromZero);
+
+            if (_previousBar == null && bodyRange >= _sizeInPips)
+            {
+                ChangeLastBar(time, barIndex);
+            }
+            else if (_previousBar != null)
+            {
+                if (_previousBar.Type == _lastBar.Type && bodyRange >= _sizeInPips)
+                {
+                    ChangeLastBar(time, barIndex);
+                }
+                else if (_previousBar.Type != _lastBar.Type && bodyRange >= _doubleSizeInPips)
+                {
+                    ChangeLastBar(time, barIndex);
+                }
+            }
+        }
 
         private void FillOutputs(int index, CustomOhlcBar lastBar, CustomOhlcBar previousBar)
         {
@@ -290,6 +298,11 @@ namespace cAlgo
                     _lastBar.Open = _previousBar.Type == _lastBar.Type ? _previousBar.Close : _previousBar.Open;
                 }
 
+                if (_lastBar.BodyRange > _sizeInPips)
+                {
+                    Chart.DrawVerticalLine(index.ToString(), time, Color.Red);
+                }
+
                 DrawBar(_lastBar, _previousBar);
             }
 
@@ -298,6 +311,8 @@ namespace cAlgo
             _lastBar = new CustomOhlcBar
             {
                 StartTime = time,
+                StartIndex = index,
+                EndIndex = index,
                 Open = _previousBar == null ? (decimal)_bars.OpenPrices[index] : _previousBar.Close
             };
         }
@@ -311,6 +326,7 @@ namespace cAlgo
             _lastBar.Low = Minimum(_bars.LowPrices, startIndex, index);
             _lastBar.Volume = Sum(_bars.TickVolumes, startIndex, index);
             _lastBar.EndTime = time;
+            _lastBar.EndIndex = index;
         }
 
         private double Maximum(DataSeries dataSeries, int startIndex, int endIndex)
@@ -397,6 +413,10 @@ namespace cAlgo
 
         public DateTime EndTime { get; set; }
 
+        public int StartIndex { get; set; }
+
+        public int EndIndex { get; set; }
+
         public ChartRectangle Rectangle { get; set; }
 
         public int Index { get; set; }
@@ -447,14 +467,6 @@ namespace cAlgo
                 return Math.Abs(Close - Open);
             }
         }
-    }
-
-    public enum ChartPeriodType
-    {
-        Time,
-        Ticks,
-        Renko,
-        Range
     }
 
     public enum BarType
