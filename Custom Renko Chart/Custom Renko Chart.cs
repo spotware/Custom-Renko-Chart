@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 
 namespace cAlgo
 {
@@ -23,6 +24,8 @@ namespace cAlgo
         private bool _isChartTypeValid;
 
         private decimal _sizeInPips, _doubleSizeInPips;
+
+        private Bars _bars;
 
         #endregion Fields
 
@@ -115,9 +118,9 @@ namespace cAlgo
         {
             _chartObjectNamesSuffix = string.Format("{0}_{1}", Name, DateTime.Now.Ticks);
 
-            var timeFrame = Chart.TimeFrame.ToString();
+            var timeFrameName = Chart.TimeFrame.ToString();
 
-            if (timeFrame.StartsWith("Renko", StringComparison.Ordinal) == false)
+            if (timeFrameName.StartsWith("Renko", StringComparison.Ordinal) == false)
             {
                 var name = string.Format("Error_{0}", _chartObjectNamesSuffix);
 
@@ -127,19 +130,29 @@ namespace cAlgo
 
                 return;
             }
-            else if (int.Parse(timeFrame.Substring(5), CultureInfo.InvariantCulture) > SizeInPips)
+            else if (Convert.ToInt32(timeFrameName.Substring(5), CultureInfo.InvariantCulture) > SizeInPips)
             {
                 var name = string.Format("Error_{0}", _chartObjectNamesSuffix);
 
-                var error = string.Format("{0} Error: You must use a smaller Ranko chart to build a larger one", Name);
+                var error = string.Format("{0} Error: Your current chart size must be smaller than your set size", Name);
 
                 Area.DrawStaticText(name, error, VerticalAlignment.Center, HorizontalAlignment.Center, Color.Red);
 
                 return;
             }
-            else if (timeFrame.Equals(string.Format("Renko{0}", SizeInPips), StringComparison.InvariantCultureIgnoreCase))
+            else if (timeFrameName.Equals(string.Format("Renko{0}", SizeInPips), StringComparison.OrdinalIgnoreCase))
             {
                 return;
+            }
+            else if (SizeInPips % Convert.ToInt32(timeFrameName.Substring(5), CultureInfo.InvariantCulture) == 0)
+            {
+                _bars = Bars;
+            }
+            else
+            {
+                var timeFrame = GetTimeFrame(SizeInPips, "renko");
+
+                _bars = GetTimeFrameBars(timeFrame);
             }
 
             _isChartTypeValid = true;
@@ -158,14 +171,16 @@ namespace cAlgo
         {
             if (_isChartTypeValid == false) return;
 
-            var time = Bars.OpenTimes[index];
+            var barsIndex = _bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+
+            var time = _bars.OpenTimes[barsIndex];
 
             if (_lastBar == null)
             {
-                ChangeLastBar(time, index);
+                ChangeLastBar(time, barsIndex);
             }
 
-            UpdateLastBar(time, index);
+            UpdateLastBar(time, barsIndex);
 
             FillOutputs(index, _lastBar, _previousBar);
 
@@ -173,17 +188,17 @@ namespace cAlgo
 
             if (_previousBar == null && bodyRange >= _sizeInPips)
             {
-                ChangeLastBar(time, index);
+                ChangeLastBar(time, barsIndex);
             }
             else if (_previousBar != null)
             {
                 if (_previousBar.Type == _lastBar.Type && bodyRange >= _sizeInPips)
                 {
-                    ChangeLastBar(time, index);
+                    ChangeLastBar(time, barsIndex);
                 }
                 else if (_previousBar.Type != _lastBar.Type && bodyRange >= _doubleSizeInPips)
                 {
-                    ChangeLastBar(time, index);
+                    ChangeLastBar(time, barsIndex);
                 }
             }
         }
@@ -283,18 +298,18 @@ namespace cAlgo
             _lastBar = new CustomOhlcBar
             {
                 StartTime = time,
-                Open = _previousBar == null ? (decimal)Bars.OpenPrices[index] : _previousBar.Close
+                Open = _previousBar == null ? (decimal)_bars.OpenPrices[index] : _previousBar.Close
             };
         }
 
         private void UpdateLastBar(DateTime time, int index)
         {
-            int startIndex = Bars.OpenTimes.GetIndexByTime(_lastBar.StartTime);
+            int startIndex = _bars.OpenTimes.GetIndexByTime(_lastBar.StartTime);
 
-            _lastBar.Close = (decimal)Bars.ClosePrices[index];
-            _lastBar.High = Maximum(Bars.HighPrices, startIndex, index);
-            _lastBar.Low = Minimum(Bars.LowPrices, startIndex, index);
-            _lastBar.Volume = Sum(Bars.TickVolumes, startIndex, index);
+            _lastBar.Close = (decimal)_bars.ClosePrices[index];
+            _lastBar.High = Maximum(_bars.HighPrices, startIndex, index);
+            _lastBar.Low = Minimum(_bars.LowPrices, startIndex, index);
+            _lastBar.Volume = Sum(_bars.TickVolumes, startIndex, index);
             _lastBar.EndTime = time;
         }
 
@@ -332,6 +347,45 @@ namespace cAlgo
             }
 
             return sum;
+        }
+
+        private TimeFrame GetTimeFrame(int sizeInPips, string type)
+        {
+            var timeFrames = (from timeFrame in TimeFrame.GetType().GetFields()
+                              where timeFrame.Name.StartsWith(type, StringComparison.OrdinalIgnoreCase)
+                              let timeFrameSize = Convert.ToInt32(timeFrame.Name.Substring(type.Length))
+                              where timeFrameSize <= sizeInPips && sizeInPips % timeFrameSize == 0
+                              orderby timeFrameSize descending
+                              select new Tuple<TimeFrame, int>(timeFrame.GetValue(null) as TimeFrame, timeFrameSize)).ToArray();
+
+            var bestFitTimeFrame = timeFrames.FirstOrDefault(timeFrame => timeFrame.Item2 <= sizeInPips && sizeInPips % timeFrame.Item2 == 0);
+
+            if (bestFitTimeFrame != null) return bestFitTimeFrame.Item1;
+
+            var smallestTimeFrame = timeFrames.LastOrDefault();
+
+            if (smallestTimeFrame != null) return smallestTimeFrame.Item1;
+
+            throw new InvalidOperationException(string.Format("Couldn't find a proper time frame for your provided size ({0} Pips) and type ({1}).", sizeInPips, type));
+        }
+
+        private Bars GetTimeFrameBars(TimeFrame timeFrame)
+        {
+            var bars = MarketData.GetBars(timeFrame);
+
+            if (bars.Count == 0)
+            {
+                throw new InvalidOperationException(string.Format("Couldn't load the {0} time frame bars", timeFrame));
+            }
+
+            var numberOfLoadedBars = bars.Count;
+
+            while (numberOfLoadedBars > 0 && bars[0].OpenTime > Bars[0].OpenTime)
+            {
+                numberOfLoadedBars = bars.LoadMoreHistory();
+            }
+
+            return bars;
         }
 
         #endregion Other methods
