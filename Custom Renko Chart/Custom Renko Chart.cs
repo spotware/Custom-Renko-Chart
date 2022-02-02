@@ -13,8 +13,6 @@ namespace cAlgo
 
         private const string Name = "Custom Renko Chart";
 
-        private readonly List<string> _objectNames = new List<string>();
-
         private string _chartObjectNamesSuffix;
 
         private CustomOhlcBar _lastBar, _previousBar;
@@ -282,11 +280,6 @@ namespace cAlgo
                         _bullishBarWickColor, WicksThickness, WicksLineStyle);
                 }
             }
-
-            if (!_objectNames.Contains(objectName))
-            {
-                _objectNames.Add(objectName);
-            }
         }
 
         private void ChangeLastBar(DateTime time, int index)
@@ -341,7 +334,7 @@ namespace cAlgo
             return max;
         }
 
-        public double Minimum(DataSeries dataSeries, int startIndex, int endIndex)
+        private double Minimum(DataSeries dataSeries, int startIndex, int endIndex)
         {
             var min = double.PositiveInfinity;
 
@@ -353,7 +346,7 @@ namespace cAlgo
             return min;
         }
 
-        public static double Sum(DataSeries dataSeries, int startIndex, int endIndex)
+        private double Sum(DataSeries dataSeries, int startIndex, int endIndex)
         {
             double sum = 0;
 
