@@ -119,7 +119,7 @@ namespace cAlgo
 
             var timeFrameName = Chart.TimeFrame.ToString();
 
-            if (timeFrameName.StartsWith("Renko", StringComparison.Ordinal) == false)
+            if (timeFrameName.StartsWith(TimeFrameNamePrefix, StringComparison.OrdinalIgnoreCase) == false)
             {
                 var name = string.Format("Error_{0}", _chartObjectNamesSuffix);
 
@@ -139,7 +139,7 @@ namespace cAlgo
 
                 return;
             }
-            else if (timeFrameName.Equals(string.Format("Renko{0}", SizeInPips), StringComparison.OrdinalIgnoreCase))
+            else if (timeFrameName.Equals(string.Format("{0}{1}", TimeFrameNamePrefix, SizeInPips), StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -179,10 +179,12 @@ namespace cAlgo
                 ChangeLastBar(time, otherBarsIndex);
             }
 
-            for (int barIndex = _lastBar.EndIndex; barIndex <= otherBarsIndex; barIndex++)
+            for (int barIndex = _lastBar.Index; barIndex <= otherBarsIndex; barIndex++)
             {
                 OnBar(_bars.OpenTimes[barIndex], barIndex, index);
             }
+
+            DrawBar(_lastBar, _previousBar);
         }
 
         #endregion Overridden methods
@@ -248,36 +250,50 @@ namespace cAlgo
 
         private void DrawBar(CustomOhlcBar lastBar, CustomOhlcBar previousBar)
         {
-            string objectName = string.Format("{0}.{1}", lastBar.StartTime.Ticks, _chartObjectNamesSuffix);
+            string objectName = string.Format("{0}.{1}", lastBar.Id, _chartObjectNamesSuffix);
 
             var barBodyColor = lastBar.Open > lastBar.Close ? _bearishBarBodyColor : _bullishBarBodyColor;
 
-            var open = previousBar == null || previousBar.Type == lastBar.Type ? lastBar.Open : previousBar.Open;
+            double open = double.NaN;
 
-            lastBar.Rectangle = Area.DrawRectangle(objectName, lastBar.StartTime, decimal.ToDouble(open), lastBar.EndTime, decimal.ToDouble(lastBar.Close), barBodyColor, BodyThickness, BodyLineStyle);
+            if (previousBar == null || previousBar.Type == lastBar.Type)
+            {
+                open = decimal.ToDouble(lastBar.Open);
+            }
+            else if ((previousBar.Type == BarType.Bullish && lastBar.Close < _previousBar.Open) || (previousBar.Type == BarType.Bearish && lastBar.Close > _previousBar.Open))
+            {
+                open = decimal.ToDouble(previousBar.Open);
+            }
 
-            lastBar.Rectangle.IsFilled = FillBody;
+            var close = decimal.ToDouble(lastBar.Close);
+
+            if (open != double.NaN)
+            {
+                var bodyRectangle = Area.DrawRectangle(objectName, lastBar.StartTime, open, lastBar.EndTime, close, barBodyColor, BodyThickness, BodyLineStyle);
+
+                bodyRectangle.IsFilled = FillBody;
+            }
 
             if (ShowWicks)
             {
                 string upperWickObjectName = string.Format("{0}.UpperWick", objectName);
                 string lowerWickObjectName = string.Format("{0}.LowerWick", objectName);
 
-                var barHalfTimeInMinutes = (_lastBar.Rectangle.Time2 - _lastBar.Rectangle.Time1).TotalMinutes / 2;
-                var barCenterTime = _lastBar.Rectangle.Time1.AddMinutes(barHalfTimeInMinutes);
+                var barHalfTimeInMinutes = (lastBar.EndTime - lastBar.StartTime).TotalMinutes / 2;
+                var barCenterTime = lastBar.StartTime.AddMinutes(barHalfTimeInMinutes);
 
                 if (lastBar.Open > lastBar.Close)
                 {
-                    Area.DrawTrendLine(upperWickObjectName, barCenterTime, _lastBar.Rectangle.Y1, barCenterTime, lastBar.High,
+                    Area.DrawTrendLine(upperWickObjectName, barCenterTime, open, barCenterTime, lastBar.High,
                         _bearishBarWickColor, WicksThickness, WicksLineStyle);
-                    Area.DrawTrendLine(lowerWickObjectName, barCenterTime, _lastBar.Rectangle.Y2, barCenterTime, lastBar.Low,
+                    Area.DrawTrendLine(lowerWickObjectName, barCenterTime, close, barCenterTime, lastBar.Low,
                         _bearishBarWickColor, WicksThickness, WicksLineStyle);
                 }
                 else
                 {
-                    Area.DrawTrendLine(upperWickObjectName, barCenterTime, _lastBar.Rectangle.Y2,
+                    Area.DrawTrendLine(upperWickObjectName, barCenterTime, close,
                         barCenterTime, lastBar.High, _bullishBarWickColor, WicksThickness, WicksLineStyle);
-                    Area.DrawTrendLine(lowerWickObjectName, barCenterTime, _lastBar.Rectangle.Y1, barCenterTime, lastBar.Low,
+                    Area.DrawTrendLine(lowerWickObjectName, barCenterTime, open, barCenterTime, lastBar.Low,
                         _bullishBarWickColor, WicksThickness, WicksLineStyle);
                 }
             }
@@ -285,7 +301,7 @@ namespace cAlgo
 
         private void ChangeLastBar(DateTime time, int index)
         {
-            if (_lastBar != null)
+            if (_lastBar != null && _previousBar != null)
             {
                 if (_previousBar != null)
                 {
@@ -299,9 +315,9 @@ namespace cAlgo
 
             _lastBar = new CustomOhlcBar
             {
+                Id = _previousBar == null ? 0 : _previousBar.Id + 1,
                 StartTime = time,
-                StartIndex = index,
-                EndIndex = index,
+                Index = index,
                 Open = _previousBar == null ? (decimal)_bars.OpenPrices[index] : _previousBar.Close
             };
         }
@@ -314,7 +330,7 @@ namespace cAlgo
             _lastBar.High = Maximum(_bars.HighPrices, startIndex, index);
             _lastBar.Low = Minimum(_bars.LowPrices, startIndex, index);
             _lastBar.EndTime = time;
-            _lastBar.EndIndex = index;
+            _lastBar.Index = index;
         }
 
         private double Maximum(DataSeries dataSeries, int startIndex, int endIndex)
@@ -385,19 +401,13 @@ namespace cAlgo
 
     public class CustomOhlcBar
     {
+        public int Id { get; set; }
+
         public DateTime StartTime { get; set; }
 
         public DateTime EndTime { get; set; }
 
-        public int StartIndex { get; set; }
-
-        public int EndIndex { get; set; }
-
-        public ChartRectangle Rectangle { get; set; }
-
         public int Index { get; set; }
-
-        public DateTime Time { get; set; }
 
         public decimal Open { get; set; }
 
